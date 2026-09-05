@@ -98,6 +98,18 @@ Optional model override:
 OPENAI_MODEL=<model-name-you-have-access-to>
 ```
 
+## Tests
+
+The unit tests are offline and do not require `OPENAI_API_KEY`. They cover mock
+services, Pydantic serialization, tool error mapping, orchestration correlation,
+per-destination error isolation, and SDK import safety.
+
+Run them with:
+
+```bash
+uv run pytest
+```
+
 ## Why packages avoid top-level `agents/`
 
 The OpenAI Agents SDK itself is imported as:
@@ -198,6 +210,12 @@ travel_agents/
 ├── single_file_demo.py
 ├── pyproject.toml
 ├── .env.example
+├── tests/
+│   ├── test_agent_imports.py
+│   ├── test_models.py
+│   ├── test_orchestration.py
+│   ├── test_services.py
+│   └── test_tools.py
 ├── .codex/
 │   └── skills/
 │       └── python-openai-agents/
