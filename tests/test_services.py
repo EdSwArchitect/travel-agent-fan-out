@@ -10,6 +10,9 @@ from destination_stays_app.services.flight_service import (
 )
 from destination_stays_app.services.stay_service import search_stays_service
 from travel_app.services.flight_service import search_flights_service
+from travel_app.services.flight_enrichment_service import (
+    enrich_flight_information_service,
+)
 from travel_app.services.hotel_service import search_hotels_service
 
 
@@ -92,5 +95,43 @@ def test_services_reject_invalid_inputs() -> None:
                 check_in=date(2026, 10, 10),
                 check_out=date(2026, 10, 17),
             )
+
+    asyncio.run(run())
+
+
+def test_flight_enrichment_service_identifies_airline_without_live_status() -> None:
+    async def run() -> None:
+        summary = await enrich_flight_information_service(
+            flight_number="aa 1234",
+            flight_date=date(2026, 10, 10),
+        )
+
+        assert summary.flight_number == "AA1234"
+        assert summary.flight_date == date(2026, 10, 10)
+        assert summary.airline == "American Airlines"
+        assert summary.requires_date is False
+        assert summary.real_time_status_verified is False
+        assert "current_status" in summary.unverified_fields
+
+    asyncio.run(run())
+
+
+def test_flight_enrichment_service_identifies_three_letter_prefix() -> None:
+    async def run() -> None:
+        summary = await enrich_flight_information_service(flight_number="AAL123")
+
+        assert summary.flight_number == "AAL123"
+        assert summary.airline == "American Airlines"
+
+    asyncio.run(run())
+
+
+def test_flight_enrichment_service_requires_date_for_live_lookup() -> None:
+    async def run() -> None:
+        summary = await enrich_flight_information_service(flight_number="DL42")
+
+        assert summary.airline == "Delta Air Lines"
+        assert summary.requires_date is True
+        assert any("flight date" in note for note in summary.notes)
 
     asyncio.run(run())

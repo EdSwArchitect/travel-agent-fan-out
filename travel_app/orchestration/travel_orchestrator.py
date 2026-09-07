@@ -9,7 +9,12 @@ from agents import Runner, function_tool
 from travel_app.agents.hawaii_agent import hawaii_agent
 from travel_app.agents.jamaican_agent import jamaican_agent
 from travel_app.agents.paris_agent import paris_agent
+from travel_app.models.flight_enrichment_models import FlightInformationSummary
 from travel_app.models.travel_models import DestinationResult, TravelSearchResult
+from travel_app.services.flight_enrichment_service import (
+    UNVERIFIED_LIVE_FIELDS,
+    enrich_flight_information_service,
+)
 
 
 def _destination_input(
@@ -52,6 +57,9 @@ async def _run_destination(
 async def run_parallel_destination_searches_impl(
     start_date: date,
     end_date: date,
+    *,
+    include_flight_enrichment: bool = False,
+    enrichment_limit: int = 5,
 ) -> TravelSearchResult:
     if start_date > end_date:
         raise ValueError("start_date must be on or before end_date")
@@ -75,12 +83,50 @@ async def run_parallel_destination_searches_impl(
     )
 
     # FAN IN -- destination-correlated typed output.
-    return TravelSearchResult(
+    result = TravelSearchResult(
         origin="BWI",
         start_date=start_date,
         end_date=end_date,
         destinations=[jamaica, paris, hawaii],
     )
+
+    if include_flight_enrichment:
+        await enrich_travel_search_result(
+            result,
+            enrichment_limit=enrichment_limit,
+        )
+
+    return result
+
+
+async def enrich_travel_search_result(
+    result: TravelSearchResult,
+    *,
+    enrichment_limit: int = 5,
+) -> TravelSearchResult:
+    if enrichment_limit <= 0:
+        return result
+
+    for destination in result.destinations:
+        for flight in destination.flights[:enrichment_limit]:
+            try:
+                flight.enrichment = await enrich_flight_information_service(
+                    flight_number=flight.flight_number,
+                    flight_date=flight.departure_time.date(),
+                )
+            except Exception as exc:
+                flight.enrichment = FlightInformationSummary(
+                    flight_number=flight.flight_number,
+                    flight_date=flight.departure_time.date(),
+                    real_time_status_verified=False,
+                    unverified_fields=UNVERIFIED_LIVE_FIELDS.copy(),
+                    notes=[
+                        "Flight enrichment failed; original flight data was preserved.",
+                        f"{type(exc).__name__}: {exc}",
+                    ],
+                )
+
+    return result
 
 
 @function_tool

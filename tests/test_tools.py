@@ -11,6 +11,8 @@ from destination_stays_app.models.destination_models import (
 from destination_stays_app.tools.flight_tools import search_destination_flights
 from destination_stays_app.tools.stay_tools import search_stays
 from travel_app.models.travel_models import FlightSearchResponse, HotelSearchResponse
+from travel_app.models.flight_enrichment_models import FlightInformationSummary
+from travel_app.tools.flight_enrichment_tools import lookup_flight_information
 from travel_app.tools.flight_tools import search_flights
 from travel_app.tools.hotel_tools import search_hotels
 
@@ -97,5 +99,27 @@ def test_destination_stays_tool_wrappers_map_service_errors() -> None:
         assert stay_response.stays == []
         assert stay_response.error
         assert "Unsupported destination" in stay_response.error
+
+    asyncio.run(run())
+
+
+def test_flight_enrichment_tool_returns_structured_unverified_summary() -> None:
+    async def run() -> None:
+        summary_json = await lookup_flight_information.on_invoke_tool(
+            _tool_context("lookup_flight_information"),
+            json.dumps(
+                {
+                    "flight_number": "UA 100",
+                    "flight_date": "2026-10-10",
+                }
+            ),
+        )
+
+        summary = FlightInformationSummary.model_validate_json(summary_json)
+
+        assert summary.flight_number == "UA100"
+        assert summary.airline == "United Airlines"
+        assert summary.real_time_status_verified is False
+        assert "gate" in summary.unverified_fields
 
     asyncio.run(run())

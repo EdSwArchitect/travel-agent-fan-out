@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 import os
@@ -9,6 +10,7 @@ from agents import Runner
 
 from travel_app.agents.router_agent import router_agent
 from travel_app.models.travel_models import TravelSearchResult
+from travel_app.orchestration.travel_orchestrator import enrich_travel_search_result
 
 
 def print_human_readable(result: TravelSearchResult) -> None:
@@ -47,6 +49,20 @@ def print_human_readable(result: TravelSearchResult) -> None:
                     f"{flight.departure_time.isoformat(sep=' ', timespec='minutes')} -> "
                     f"{arrival} | {price}"
                 )
+                if flight.enrichment:
+                    verified = (
+                        "verified"
+                        if flight.enrichment.real_time_status_verified
+                        else "not verified"
+                    )
+                    airline = flight.enrichment.airline or "unverified"
+                    print(
+                        f"    Enrichment: airline={airline}; "
+                        f"real-time status={verified}"
+                    )
+                    if flight.enrichment.unverified_fields:
+                        fields = ", ".join(flight.enrichment.unverified_fields)
+                        print(f"    Unverified: {fields}")
 
         print("\nHOTELS")
         if destination.hotel_error:
@@ -73,14 +89,31 @@ def print_human_readable(result: TravelSearchResult) -> None:
 
 
 async def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Run the original fan-out/fan-in travel agents demo.",
+    )
+    parser.add_argument(
+        "--include-flight-enrichment",
+        action="store_true",
+        help="Attach conservative local flight enrichment to the top flights.",
+    )
+    parser.add_argument(
+        "--enrichment-limit",
+        type=int,
+        default=5,
+        help="Number of flights per destination to enrich when enabled.",
+    )
+    parser.add_argument("request", nargs="*")
+    args = parser.parse_args()
+
     if not os.getenv("OPENAI_API_KEY"):
         raise RuntimeError(
             "OPENAI_API_KEY is not set. Copy .env.example to .env and provide your key."
         )
 
     request = (
-        " ".join(sys.argv[1:]).strip()
-        if len(sys.argv) > 1
+        " ".join(args.request).strip()
+        if args.request
         else "Find flights and hotels between October 10, 2026 and October 17, 2026."
     )
 
@@ -91,6 +124,11 @@ async def main() -> None:
         TravelSearchResult,
         raise_if_incorrect_type=True,
     )
+    if args.include_flight_enrichment:
+        await enrich_travel_search_result(
+            result,
+            enrichment_limit=args.enrichment_limit,
+        )
 
     print_human_readable(result)
 

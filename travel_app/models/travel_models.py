@@ -4,6 +4,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
+from travel_app.models.flight_enrichment_models import FlightInformationSummary
+
 
 class Flight(BaseModel):
     airline: str
@@ -17,6 +19,10 @@ class Flight(BaseModel):
     nonstop: bool | None = None
     price: float | None = None
     currency: str | None = None
+    enrichment: FlightInformationSummary | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
 
 class Hotel(BaseModel):

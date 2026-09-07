@@ -1,7 +1,7 @@
 [project]
 name = "travel-agents"
 version = "0.1.0"
-description = "Parallel multi-agent travel examples using the OpenAI Agents SDK"
+description = "OpenAI Agents SDK travel examples with routing, stays, and flight enrichment"
 requires-python = ">=3.11"
 dependencies = [
   "openai-agents",
